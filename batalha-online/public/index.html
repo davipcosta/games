@@ -1,0 +1,466 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Batalha Minada</title>
+<style>
+  :root {
+    --bg: #0b1622;
+    --panel: #12233a;
+    --panel-2: #1a3150;
+    --line: #2a4a70;
+    --text: #e6eef8;
+    --muted: #8ea6c4;
+    --water: #16385c;
+    --water-hover: #1f4c7a;
+    --revealed: #0e2236;
+    --ship: #7d8fa3;
+    --ship-edge: #a9b8c9;
+    --hit: #e5484d;
+    --sunk: #7a1d22;
+    --flag: #f5b83d;
+    --ok: #3ccf91;
+    --bad: #e5484d;
+    --accent: #4aa3ff;
+    --cell: min(7.6vw, 36px);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    min-height: 100vh; display: flex; flex-direction: column; align-items: center;
+    padding: 16px;
+  }
+  h1 { margin: 4px 0 2px; font-size: 1.6rem; }
+  .sub { color: var(--muted); margin: 0 0 12px; font-size: .9rem; text-align: center; }
+  .badge {
+    display: inline-block; padding: 2px 10px; border-radius: 99px; font-size: .8rem; font-weight: 700;
+    background: var(--panel-2); border: 1px solid var(--line); margin-left: 6px; vertical-align: middle;
+  }
+  .status {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 10px 16px; margin-bottom: 14px; text-align: center;
+    width: min(100%, 560px); font-weight: 700; font-size: 1.05rem;
+  }
+  .status.myturn { border-color: var(--ok); box-shadow: 0 0 0 2px color-mix(in srgb, var(--ok) 40%, transparent); }
+  .status small { display: block; font-weight: 400; font-size: .85rem; color: var(--muted); margin-top: 3px; }
+  .boards { display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; align-items: flex-start; }
+  .board-wrap { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px; }
+  .board-wrap h2 { font-size: 1rem; margin: 0 0 8px; text-align: center; }
+  .grid {
+    display: grid; gap: 2px; user-select: none;
+    grid-template-columns: 20px repeat(10, var(--cell));
+    grid-template-rows: 20px repeat(10, var(--cell));
+  }
+  .lbl { display: flex; align-items: center; justify-content: center; font-size: .7rem; color: var(--muted); }
+  .cell {
+    width: var(--cell); height: var(--cell); border: none; border-radius: 4px; padding: 0;
+    background: var(--water); color: var(--text);
+    font-weight: 800; font-size: calc(var(--cell) * .45);
+    display: flex; align-items: center; justify-content: center;
+    touch-action: manipulation;
+  }
+  .clickable .cell:not(.shot) { cursor: crosshair; }
+  .clickable .cell:not(.shot):hover { background: var(--water-hover); outline: 2px solid var(--accent); }
+  .cell.ship { background: var(--ship); box-shadow: inset 0 0 0 2px var(--ship-edge); }
+  .cell.miss { background: var(--revealed); }
+  .cell.hit { background: var(--hit); }
+  .cell.hit::after { content: "✕"; color: #fff; }
+  .cell.sunk { background: var(--sunk); }
+  .cell.sunk::after { content: "✕"; color: #ffb3b6; }
+  .cell.flag::after { content: "⚑"; color: var(--flag); }
+  .cell.last { outline: 2px solid var(--flag); outline-offset: -2px; }
+  .cell.preview-ok { background: color-mix(in srgb, var(--ok) 55%, var(--water)); }
+  .cell.preview-bad { background: color-mix(in srgb, var(--bad) 55%, var(--water)); }
+  .n1 { color: #5fb4ff; } .n2 { color: #3ccf91; } .n3 { color: #ff7b72; } .n4 { color: #c297ff; }
+  .n5 { color: #ffa94d; } .n6 { color: #4fd1c5; } .n7 { color: #f0f0f0; } .n8 { color: #aaa; }
+
+  .side { display: flex; flex-direction: column; gap: 10px; width: 260px; max-width: 100%; }
+  .fleet { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+  .fleet li {
+    display: flex; justify-content: space-between; align-items: center; gap: 8px;
+    background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px;
+    padding: 6px 10px; font-size: .88rem;
+  }
+  .fleet li.active { outline: 2px solid var(--accent); }
+  .fleet li.done { opacity: .55; }
+  .fleet li.dead { text-decoration: line-through; color: var(--bad); }
+  .pips { display: flex; gap: 3px; }
+  .pip { width: 11px; height: 11px; border-radius: 2px; background: var(--ship); }
+  .pip.h { background: var(--hit); }
+  .btns { display: flex; gap: 8px; flex-wrap: wrap; }
+  button.btn {
+    background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 8px;
+    padding: 8px 14px; font-size: .9rem; cursor: pointer; font-weight: 600;
+  }
+  button.btn:hover { border-color: var(--accent); }
+  button.btn.primary { background: var(--accent); border-color: var(--accent); color: #04121f; }
+  button.btn.active { border-color: var(--flag); color: var(--flag); }
+  button.btn:disabled { opacity: .4; cursor: not-allowed; }
+  .hint { font-size: .8rem; color: var(--muted); line-height: 1.4; margin: 0; }
+  .log { list-style: none; margin: 0; padding: 0; font-size: .8rem; color: var(--muted); display: flex; flex-direction: column; gap: 3px; }
+  .log li:last-child { color: var(--text); }
+  .invite { font-size: .8rem; color: var(--muted); margin-top: 14px; text-align: center; }
+  .invite code { color: var(--text); background: var(--panel-2); padding: 1px 6px; border-radius: 4px; }
+  .center { text-align: center; color: var(--muted); padding: 40px 16px; }
+  .toast {
+    position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
+    background: var(--bad); color: #fff; padding: 8px 16px; border-radius: 8px; font-weight: 600;
+    opacity: 0; transition: opacity .2s; pointer-events: none;
+  }
+  .toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+  <a href="../" style="position:fixed;top:10px;left:12px;color:#8ea6c4;text-decoration:none;font-size:.9rem;font-weight:600">← Hub</a>
+  <h1>⚓ Batalha Minada <span class="badge" id="who">conectando…</span></h1>
+  <p class="sub">Batalha naval com dicas de campo minado · rede local</p>
+  <div class="status" id="status">Conectando ao servidor…</div>
+  <div class="boards" id="boards"></div>
+  <div class="invite" id="invite"></div>
+  <div class="toast" id="toast"></div>
+
+<script>
+const N = 10;
+const LETTERS = "ABCDEFGHIJ";
+const idx = (r, c) => r * N + c;
+const rc = i => [Math.floor(i / N), i % N];
+const coord = i => { const [r, c] = rc(i); return LETTERS[c] + (r + 1); };
+
+let S = null;          // estado vindo do servidor
+let token = null;
+let es = null;
+let local = null;      // posicionamento local + marcações
+let flagMode = false;  // para celular: toque marca ⚑ em vez de atirar
+
+function resetLocal() {
+  local = { gameId: S ? S.gameId : null, grid: Array(N * N).fill(-1), ships: [], horizontal: true, hover: null, flags: new Set() };
+}
+resetLocal();
+
+/* ---------- Rede ---------- */
+
+async function join() {
+  let saved = null;
+  try { saved = sessionStorage.getItem("bm-token"); } catch {}
+  try {
+    const r = await fetch("join", { method: "POST", body: JSON.stringify({ token: saved }) });
+    const data = await r.json();
+    if (!r.ok) {
+      setStatus("Sala cheia", data.error || "Tente novamente mais tarde.");
+      document.getElementById("who").textContent = "espectador";
+      setTimeout(join, 5000);
+      return;
+    }
+    token = data.token;
+    try { sessionStorage.setItem("bm-token", token); } catch {}
+    listen();
+  } catch {
+    setStatus("Sem conexão", "Não foi possível falar com o servidor. Tentando de novo…");
+    setTimeout(join, 2000);
+  }
+}
+
+function listen() {
+  if (es) es.close();
+  es = new EventSource("events?token=" + encodeURIComponent(token));
+  es.onmessage = e => {
+    S = JSON.parse(e.data);
+    if (local.gameId !== S.gameId) { resetLocal(); local.gameId = S.gameId; }
+    render();
+  };
+  es.onerror = () => {
+    setStatus("Conexão perdida", "Reconectando…");
+    if (es.readyState === EventSource.CLOSED) setTimeout(join, 1500); // servidor reiniciou: entra de novo
+  };
+}
+
+async function action(payload) {
+  try {
+    const r = await fetch("action", { method: "POST", body: JSON.stringify({ token, ...payload }) });
+    if (!r.ok) toast((await r.json()).error || "Erro");
+  } catch { toast("Sem conexão com o servidor"); }
+}
+
+function toast(msg) {
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(toast.timer);
+  toast.timer = setTimeout(() => t.classList.remove("show"), 2200);
+}
+
+/* ---------- Posicionamento local ---------- */
+
+function shipCells(r, c, size, hor) {
+  const cells = [];
+  for (let k = 0; k < size; k++) {
+    const rr = hor ? r : r + k, cc = hor ? c + k : c;
+    if (rr >= N || cc >= N) return null;
+    cells.push(idx(rr, cc));
+  }
+  return cells;
+}
+const canPlace = cells => cells && cells.every(i => local.grid[i] === -1);
+
+function placeLocal(cells) {
+  local.ships.push(cells);
+  cells.forEach(i => (local.grid[i] = local.ships.length - 1));
+}
+
+function randomFleet() {
+  local.grid.fill(-1); local.ships = [];
+  for (const t of S.ships) {
+    let cells;
+    do cells = shipCells(Math.floor(Math.random() * N), Math.floor(Math.random() * N), t.size, Math.random() < .5);
+    while (!canPlace(cells));
+    placeLocal(cells);
+  }
+}
+
+function rotate() { local.horizontal = !local.horizontal; render(); }
+
+/* ---------- Renderização ---------- */
+
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text != null) e.textContent = text;
+  return e;
+}
+
+function setStatus(title, sub, myTurn = false) {
+  const s = document.getElementById("status");
+  s.innerHTML = "";
+  s.append(title);
+  if (sub) s.appendChild(el("small", null, sub));
+  s.classList.toggle("myturn", myTurn);
+}
+
+// cellsView: array de strings vindas do servidor ('', 'S', 'H', 'X', 'M0'..'M8')
+function buildGrid({ cellsView, clickable, onClick, onRight, onHover, preview, flags, last }) {
+  const g = el("div", "grid" + (clickable ? " clickable" : ""));
+  g.appendChild(el("div", "lbl"));
+  for (let c = 0; c < N; c++) g.appendChild(el("div", "lbl", LETTERS[c]));
+  for (let r = 0; r < N; r++) {
+    g.appendChild(el("div", "lbl", r + 1));
+    for (let c = 0; c < N; c++) {
+      const i = idx(r, c);
+      const v = cellsView[i];
+      const b = el("button", "cell");
+      if (v === "S") b.classList.add("ship");
+      else if (v === "H") b.classList.add("shot", "hit");
+      else if (v === "X") b.classList.add("shot", "sunk");
+      else if (v && v[0] === "M") {
+        b.classList.add("shot", "miss");
+        const n = +v.slice(1);
+        if (n) { b.textContent = n; b.classList.add("n" + n); }
+      } else if (flags && flags.has(i)) b.classList.add("flag");
+      if (last === i) b.classList.add("last");
+      if (preview && preview.cells.includes(i)) b.classList.add(preview.ok ? "preview-ok" : "preview-bad");
+      b.title = coord(i);
+      if (onClick) b.addEventListener("click", () => onClick(i));
+      if (onRight) b.addEventListener("contextmenu", e => { e.preventDefault(); onRight(i); });
+      if (onHover) b.addEventListener("mouseenter", () => onHover(i));
+      g.appendChild(b);
+    }
+  }
+  if (onHover) g.addEventListener("mouseleave", () => onHover(null));
+  return g;
+}
+
+function fleetList(items) {
+  const ul = el("ul", "fleet");
+  items.forEach(({ name, size, hits, cls }) => {
+    const li = el("li", cls);
+    li.appendChild(el("span", null, `${name} (${size})`));
+    const pips = el("span", "pips");
+    for (let j = 0; j < size; j++) pips.appendChild(el("span", "pip" + (j < hits ? " h" : "")));
+    li.appendChild(pips);
+    ul.appendChild(li);
+  });
+  return ul;
+}
+
+function logPanel() {
+  const ul = el("ul", "log");
+  S.log.slice(-6).forEach(m => ul.appendChild(el("li", null, m)));
+  return ul;
+}
+
+function opponentNote() {
+  const e = S.enemy;
+  if (!e.joined) return "Aguardando o adversário entrar…";
+  if (!e.connected) return "⚠ Adversário desconectado — aguardando ele voltar.";
+  return "";
+}
+
+function renderSetup(boards) {
+  const done = local.ships.length >= S.ships.length;
+  const opp = opponentNote();
+
+  if (S.me.ready) {
+    setStatus("Frota confirmada ✓",
+      opp || (S.enemy.ready ? "Começando…" : "Aguardando o adversário posicionar a frota…"));
+    const wrap = el("div", "board-wrap");
+    wrap.appendChild(el("h2", null, "Sua frota"));
+    wrap.appendChild(buildGrid({ cellsView: S.me.board }));
+    boards.appendChild(wrap);
+    return;
+  }
+
+  const next = S.ships[local.ships.length];
+  setStatus("Posicione sua frota",
+    (done ? "Frota completa! Confirme para continuar." :
+      `Coloque o ${next.name} (${next.size} casas) — ${local.horizontal ? "horizontal" : "vertical"}`) +
+    (opp ? " · " + opp : S.enemy.ready ? " · Adversário já está pronto!" : ""));
+
+  let preview = null;
+  if (!done && local.hover != null) {
+    const [r, c] = rc(local.hover);
+    let cells = shipCells(r, c, next.size, local.horizontal);
+    const ok = canPlace(cells);
+    if (!cells) {
+      cells = [];
+      for (let k = 0; k < next.size; k++) {
+        const rr = local.horizontal ? r : r + k, cc = local.horizontal ? c + k : c;
+        if (rr < N && cc < N) cells.push(idx(rr, cc));
+      }
+    }
+    preview = { cells, ok };
+  }
+
+  const wrap = el("div", "board-wrap");
+  wrap.appendChild(el("h2", null, "Sua frota"));
+  wrap.appendChild(buildGrid({
+    cellsView: local.grid.map(s => (s >= 0 ? "S" : "")),
+    clickable: !done,
+    onClick: i => {
+      if (done) return;
+      const [r, c] = rc(i);
+      const cells = shipCells(r, c, next.size, local.horizontal);
+      if (canPlace(cells)) { placeLocal(cells); render(); }
+      else toast("Não cabe aí");
+    },
+    onRight: rotate,
+    onHover: i => { if (local.hover !== i) { local.hover = i; render(); } },
+    preview,
+  }));
+  boards.appendChild(wrap);
+
+  const side = el("div", "side board-wrap");
+  side.appendChild(el("h2", null, "Embarcações"));
+  side.appendChild(fleetList(S.ships.map((t, k) => ({
+    ...t, hits: 0, cls: k < local.ships.length ? "done" : k === local.ships.length ? "active" : "",
+  }))));
+  const btns = el("div", "btns");
+  const rot = el("button", "btn", "↻ Girar (R)"); rot.onclick = rotate;
+  const rnd = el("button", "btn", "🎲 Aleatório"); rnd.onclick = () => { randomFleet(); render(); };
+  const clr = el("button", "btn", "Limpar"); clr.onclick = () => { local.grid.fill(-1); local.ships = []; render(); };
+  const ok = el("button", "btn primary", "Confirmar ✓");
+  ok.disabled = !done;
+  ok.onclick = () => action({ type: "place", ships: local.ships });
+  btns.append(rot, rnd, clr, ok);
+  side.appendChild(btns);
+  side.appendChild(el("p", "hint", "Clique para posicionar. Botão direito ou tecla R gira o navio."));
+  boards.appendChild(side);
+}
+
+function renderBattle(boards) {
+  const over = S.phase === "over";
+  const myTurn = !over && S.current === S.seat;
+  const opp = opponentNote();
+
+  if (over) {
+    const won = S.winner === S.seat;
+    setStatus(won ? "🏆 Você venceu!" : "💀 Você perdeu!", S.log[S.log.length - 1]);
+  } else {
+    setStatus(myTurn ? "🎯 Sua vez!" : "⏳ Vez do adversário…",
+      opp || S.log[S.log.length - 1] || (myTurn ? "Clique no território inimigo para atirar." : ""), myTurn);
+  }
+  document.title = myTurn ? "🎯 Sua vez — Batalha Minada" : "Batalha Minada";
+
+  const lastEnemy = S.lastShot && S.lastShot.by === S.seat ? S.lastShot.i : null;
+  const lastMine = S.lastShot && S.lastShot.by !== S.seat ? S.lastShot.i : null;
+
+  const atk = el("div", "board-wrap");
+  atk.appendChild(el("h2", null, "🎯 Território inimigo"));
+  const toggleFlag = i => {
+    if (S.enemy.board[i]) return;
+    local.flags.has(i) ? local.flags.delete(i) : local.flags.add(i);
+    render();
+  };
+  atk.appendChild(buildGrid({
+    cellsView: S.enemy.board, clickable: myTurn, flags: local.flags, last: lastEnemy,
+    onClick: over ? null : i => {
+      if (flagMode) return toggleFlag(i);
+      if (!myTurn) return toast("Aguarde sua vez");
+      if (S.enemy.board[i]) return;
+      local.flags.delete(i);
+      action({ type: "shoot", cell: i });
+    },
+    onRight: over ? null : toggleFlag,
+  }));
+  boards.appendChild(atk);
+
+  const side = el("div", "side board-wrap");
+  side.appendChild(el("h2", null, "Frota inimiga"));
+  side.appendChild(fleetList(S.ships.map((t, k) => {
+    const sunk = S.enemy.fleet[k].sunk;
+    return { ...t, hits: sunk ? t.size : 0, cls: sunk ? "dead" : "" };
+  })));
+  side.appendChild(el("p", "hint", `Seus tiros: ${S.me.fired} · acertos: ${S.me.hits}`));
+  side.appendChild(el("h2", null, "🛡️ Sua frota"));
+  side.appendChild(fleetList(S.ships.map((t, k) => {
+    const h = S.me.fleet[k].hits;
+    return { ...t, hits: h, cls: h === t.size ? "dead" : "" };
+  })));
+  const btns = el("div", "btns");
+  if (over) {
+    const again = el("button", "btn primary", "🔁 Revanche");
+    again.onclick = () => action({ type: "restart" });
+    btns.appendChild(again);
+  } else {
+    const fm = el("button", "btn" + (flagMode ? " active" : ""), flagMode ? "⚑ Modo marcar: ON" : "⚑ Modo marcar");
+    fm.onclick = () => { flagMode = !flagMode; render(); };
+    btns.appendChild(fm);
+  }
+  side.appendChild(btns);
+  side.appendChild(el("h2", null, "Registro"));
+  side.appendChild(logPanel());
+  side.appendChild(el("p", "hint",
+    "Água mostra quantas partes de navio há nas 8 casas vizinhas." + (S.expandir ? " Zero abre a área ao redor." : "") + " " +
+    "Acertou? Atire de novo! Botão direito (ou Modo marcar) põe ⚑."));
+  boards.appendChild(side);
+
+  const def = el("div", "board-wrap");
+  def.appendChild(el("h2", null, "Seu mar (tiros do inimigo)"));
+  def.appendChild(buildGrid({ cellsView: S.me.board, last: lastMine }));
+  boards.appendChild(def);
+}
+
+function render() {
+  if (!S) return;
+  document.getElementById("who").textContent = `Jogador ${S.seat + 1}`;
+  const boards = document.getElementById("boards");
+  boards.innerHTML = "";
+  if (S.phase === "setup") { renderSetup(boards); document.title = "Batalha Minada"; }
+  else renderBattle(boards);
+
+  const inv = document.getElementById("invite");
+  inv.innerHTML = "";
+  if (S.addresses.length) {
+    inv.append("Endereço para o outro jogador (mesma rede Wi-Fi): ");
+    S.addresses.forEach((a, k) => { if (k) inv.append(" ou "); inv.appendChild(el("code", null, a)); });
+  }
+}
+
+document.addEventListener("keydown", e => {
+  if (S && S.phase === "setup" && !S.me.ready && (e.key === "r" || e.key === "R")) rotate();
+});
+
+join();
+</script>
+</body>
+</html>

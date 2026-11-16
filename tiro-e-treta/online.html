@@ -1,0 +1,452 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Tiro & Treta Online</title>
+<style>
+  :root {
+    --bg: #07080b; --panel: #151922; --panel-2: #1c2230; --line: #2b3242;
+    --text: #e9edf5; --muted: #8d97ab; --accent: #ff5a3c; --ok: #3ccf91;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); overflow: hidden;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { display: block; background: #000; touch-action: none; }
+  .overlay { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+    padding: 16px; overflow: auto; background: rgba(4, 5, 8, .55); z-index: 5; }
+  .hidden { display: none !important; }
+  .panel { background: rgba(21, 25, 34, .95); border: 1px solid var(--line); border-radius: 16px;
+    padding: 22px 24px; width: min(860px, 100%); max-height: 100%; overflow: auto; box-shadow: 0 20px 60px rgba(0,0,0,.5); }
+  .panel.small { width: min(440px, 100%); text-align: center; }
+  .top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  h1 { margin: 0; font-size: clamp(1.7rem, 4.5vw, 2.5rem); font-weight: 900; line-height: 1; }
+  h1 .amp { color: var(--accent); }
+  h1 small { font-size: .45em; color: var(--ok); vertical-align: middle; margin-left: 6px; letter-spacing: .08em; }
+  h2 { margin: 18px 0 8px; font-size: .8rem; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); }
+  a.back { color: var(--muted); text-decoration: none; font-weight: 600; font-size: .9rem; white-space: nowrap; }
+  a.back:hover { color: var(--text); }
+  .seats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  @media (max-width: 700px) { .seats { grid-template-columns: repeat(2, 1fr); } }
+  .seat { border: 2px solid var(--line); border-top: 6px solid var(--c); border-radius: 10px; padding: 10px 12px;
+    background: var(--panel-2); min-height: 64px; }
+  .seat .who { font-weight: 800; font-size: 1rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .seat .tag { font-size: .78rem; color: var(--muted); margin-top: 3px; }
+  .seat.me { box-shadow: 0 0 0 2px var(--c); }
+  .seat.empty .who { color: var(--muted); font-weight: 600; }
+  .seat.off { opacity: .5; }
+  input, select { width: 100%; padding: 8px 10px; border-radius: 8px; background: #0f131b; color: var(--text);
+    border: 1px solid var(--line); font: inherit; font-size: .95rem; }
+  select:disabled { opacity: .7; }
+  .row { display: flex; gap: 12px; flex-wrap: wrap; }
+  .row > label { flex: 1; min-width: 140px; display: flex; flex-direction: column; gap: 4px; font-size: .85rem; color: var(--muted); }
+  .actions { display: flex; gap: 10px; align-items: center; justify-content: flex-end; margin-top: 18px; flex-wrap: wrap; }
+  .msg { color: #ff8b78; font-size: .9rem; margin-right: auto; }
+  .wait { color: var(--muted); margin-right: auto; font-size: .95rem; }
+  button { font: inherit; font-weight: 800; border-radius: 10px; border: 1px solid var(--line);
+    background: var(--panel-2); color: var(--text); padding: 10px 18px; cursor: pointer; }
+  button:hover { border-color: var(--muted); }
+  button.go { background: var(--accent); border-color: var(--accent); color: #fff; font-size: 1.05rem; padding: 11px 26px; }
+  .invite { background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font-size: .9rem; color: var(--muted); }
+  .invite b { color: var(--ok); font-family: ui-monospace, monospace; user-select: all; }
+  .tip { color: var(--muted); font-size: .85rem; margin: 10px 0 0; line-height: 1.6; }
+  kbd { display: inline-block; min-width: 1.6em; text-align: center; padding: 0 5px; border-radius: 5px;
+    background: #0f131b; border: 1px solid var(--line); border-bottom-width: 2px; font: 600 .8rem ui-monospace, monospace; }
+  .board { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: .95rem; }
+  .board td { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: left; }
+  .board td:nth-child(3), .board td:nth-child(4) { text-align: right; }
+  .dot { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 8px; vertical-align: -1px; }
+  .stack { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
+  .big { font-size: 1.8rem; font-weight: 900; margin: 4px 0 2px; }
+  #status { position: fixed; top: 10px; left: 50%; transform: translateX(-50%); z-index: 6;
+    background: rgba(8,10,14,.85); border: 1px solid var(--line); border-radius: 99px; padding: 6px 14px; font-size: .85rem; font-weight: 600; }
+  /* controles de toque */
+  #touch { position: fixed; inset: 0; z-index: 4; pointer-events: none; }
+  #touch .pad { position: absolute; bottom: max(14px, env(safe-area-inset-bottom)); display: flex; gap: 10px; align-items: flex-end; pointer-events: none; }
+  #touch .left { left: max(14px, env(safe-area-inset-left)); }
+  #touch .right { right: max(14px, env(safe-area-inset-right)); }
+  #touch button { pointer-events: auto; width: 64px; height: 64px; border-radius: 50%; padding: 0; font-size: 1.3rem;
+    background: rgba(255,255,255,.12); border: 2px solid rgba(255,255,255,.28); color: #fff; user-select: none; -webkit-user-select: none; touch-action: none; }
+  #touch button.on { background: rgba(255,90,60,.55); border-color: var(--accent); }
+  #touch button small { display: block; font-size: .6rem; font-weight: 700; margin-top: -2px; }
+  #touch .col { display: flex; flex-direction: column; gap: 10px; }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="c"></canvas></div>
+<div id="status" class="hidden"></div>
+
+<div class="overlay" id="lobby">
+  <div class="panel">
+    <div class="top">
+      <h1>Tiro <span class="amp">&amp;</span> Treta <small>ONLINE</small></h1>
+      <a class="back" href="../../index.html">← Hub</a>
+    </div>
+    <h2>Seu nome</h2>
+    <input id="name" maxlength="12" placeholder="Como te chamam?" autocomplete="off">
+    <h2>Lutadores <span id="specs" style="text-transform:none;letter-spacing:0"></span></h2>
+    <div class="seats" id="seats"></div>
+    <h2>Partida <span id="hostNote" style="text-transform:none;letter-spacing:0"></span></h2>
+    <div class="row">
+      <label>Bots <select id="bots"><option value="0">Nenhum</option><option value="1">1</option><option value="2">2</option><option value="3">3</option></select></label>
+      <label>Dificuldade dos bots <select id="diff"><option value="facil">Fácil</option><option value="medio">Médio</option><option value="dificil">Difícil</option></select></label>
+      <label>Mapa <select id="map"></select></label>
+      <label>Vitórias <select id="target"><option>1</option><option>2</option><option>3</option><option>5</option><option>7</option></select></label>
+      <label>Armas do céu <select id="drops"><option value="0.6">Poucas</option><option value="1">Normal</option><option value="1.8">Chuva</option></select></label>
+    </div>
+    <h2>Chame a galera</h2>
+    <div class="invite" id="invite">Conectando…</div>
+    <p class="tip"><b>Mouse:</b> mira com o cursor · clique esquerdo atira · direito soco/pegar · meio granada.<br>
+      Teclado: mover <kbd>A</kbd><kbd>D</kbd> ou <kbd>←</kbd><kbd>→</kbd> · pular <kbd>W</kbd>/<kbd>↑</kbd> · agachar / descer da plataforma (segure) <kbd>S</kbd>/<kbd>↓</kbd> ·
+      atirar <kbd>F</kbd>/<kbd>K</kbd> · soco/pegar <kbd>G</kbd>/<kbd>L</kbd> · granada <kbd>H</kbd>/<kbd>Ç</kbd>. Controle também funciona.
+      No celular aparecem botões na tela (deite o aparelho). <kbd>M</kbd> liga/desliga o som.</p>
+    <div class="actions">
+      <span class="msg" id="msg"></span>
+      <span class="wait" id="waitNote"></span>
+      <button class="go" id="start">Lutar!</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay hidden" id="over">
+  <div class="panel small">
+    <div style="color:var(--muted);font-weight:700">FIM DE PARTIDA</div>
+    <div class="big" id="overTitle"></div>
+    <table class="board" id="overBoard"></table>
+    <div class="stack" id="overHost">
+      <button class="go" id="again">Revanche</button>
+      <button id="toLobby">Voltar ao lobby</button>
+    </div>
+    <p class="tip" id="overWait">Aguardando o anfitrião…</p>
+  </div>
+</div>
+
+<div id="touch" class="hidden">
+  <div class="pad left">
+    <button data-k="left">◀</button>
+    <div class="col"><button data-k="down">▼</button></div>
+    <button data-k="right">▶</button>
+  </div>
+  <div class="pad right">
+    <div class="col"><button data-k="grenade">💣</button><button data-k="melee">👊<small>pegar</small></button></div>
+    <div class="col"><button data-k="up">⤒<small>pular</small></button><button data-k="shoot" style="width:78px;height:78px">🔫</button></div>
+  </div>
+</div>
+
+<script src="motor.js"></script>
+<script src="visual.js"></script>
+<script>
+"use strict";
+setEmit(fx); // só para a demonstração local atrás do lobby
+
+const GUN_IDX = [null, ...Object.keys(GUNS)];
+const ITEM_IDX = [...Object.keys(GUNS), "facao", "granadas", "vida"];
+const KEYS = ["left", "right", "up", "down", "shoot", "melee", "grenade"];
+const PRESS_KEYS = ["up", "shoot", "melee", "grenade"];
+const DELAY = 60; // ms de atraso de interpolação (suaviza a rede)
+const $ = id => document.getElementById(id);
+const store = { get(k) { try { return localStorage.getItem(k); } catch { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch {} } };
+
+/* ═══════════════════ Conexão ═══════════════════ */
+let ws = null, lobby = null, me = { seat: -1, host: false }, phase = "lobby";
+let roster = [], target = 3;
+let token = store.get("tt-token");
+const nameEl = $("name");
+nameEl.value = store.get("tt-nome") || "";
+
+function send(o) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); }
+function status(t) { $("status").textContent = t; $("status").classList.toggle("hidden", !t); }
+
+function connect() {
+  const url = (location.protocol === "https:" ? "wss://" : "ws://") + location.host + location.pathname.replace(/[^/]*$/, "") + "ws";
+  ws = new WebSocket(url);
+  ws.onopen = () => { status(""); send({ t: "join", token, name: nameEl.value }); };
+  ws.onmessage = e => { try { onMsg(JSON.parse(e.data)); } catch (err) { console.error(err); } };
+  ws.onclose = () => { status("Sem conexão com o servidor… tentando de novo"); setTimeout(connect, 1500); };
+}
+
+function onMsg(m) {
+  if (m.t === "s") return pushSnap(m);
+  if (m.t === "lobby") {
+    lobby = m; me = m.you;
+    if (m.you.token && m.you.token !== token) { token = m.you.token; store.set("tt-token", token); }
+    const prev = phase; phase = m.phase;
+    if (phase === "lobby" && prev !== "lobby") startDemo();
+    renderLobby();
+  } else if (m.t === "match") {
+    roster = m.roster; target = m.target;
+    resetNet();
+  } else if (m.t === "err") {
+    $("msg").textContent = m.msg;
+  }
+}
+
+/* ═══════════════════ Lobby ═══════════════════ */
+$("map").innerHTML = `<option value="rand">Aleatório</option>` + MAPS.map((m, i) => `<option value="${i}">${m.nome}</option>`).join("");
+const CFG_IDS = ["bots", "diff", "map", "target", "drops"];
+CFG_IDS.forEach(id => $(id).addEventListener("change", () => {
+  send({ t: "cfg", cfg: { bots: +$("bots").value, diff: $("diff").value, map: $("map").value, target: +$("target").value, drops: +$("drops").value } });
+}));
+let nameT = 0;
+nameEl.addEventListener("input", () => {
+  store.set("tt-nome", nameEl.value);
+  clearTimeout(nameT); nameT = setTimeout(() => send({ t: "name", name: nameEl.value }), 300);
+});
+$("start").onclick = () => { audioInit(); $("msg").textContent = ""; send({ t: "start" }); };
+$("again").onclick = () => { audioInit(); send({ t: "start" }); };
+$("toLobby").onclick = () => send({ t: "toLobby" });
+
+function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+
+function renderLobby() {
+  const m = lobby; if (!m) return;
+  const seats = $("seats"); seats.innerHTML = "";
+  for (let s = 0; s < 4; s++) {
+    const p = m.players.find(x => x.seat === s), L = LOOKS[s];
+    const d = document.createElement("div");
+    d.className = "seat" + (p ? "" : " empty") + (p && !p.on ? " off" : "") + (me.seat === s ? " me" : "");
+    d.style.setProperty("--c", L.shirt);
+    d.innerHTML = p
+      ? `<div class="who" style="color:${L.shirt}">${p.host ? "👑 " : ""}${esc(p.name)}</div><div class="tag">${me.seat === s ? "você" : p.on ? "conectado" : "desconectado"}</div>`
+      : `<div class="who">vago</div><div class="tag">${m.cfg.bots ? "bot pode ocupar" : "esperando alguém"}</div>`;
+    seats.append(d);
+  }
+  $("specs").textContent = m.specs ? `· ${m.specs} assistindo` : "";
+  for (const id of CFG_IDS) { $(id).value = String(m.cfg[id]); $(id).disabled = !me.host; }
+  $("hostNote").textContent = me.host ? "· você é o anfitrião" : "· o anfitrião (👑) escolhe";
+  $("start").classList.toggle("hidden", !me.host);
+  const humans = m.players.filter(p => p.on).length;
+  $("waitNote").textContent = me.host ? `${humans} jogador(es) + até ${Math.min(m.cfg.bots, 4 - humans)} bot(s)` : me.seat < 0 ? "Sala cheia: você vai assistir." : "Aguardando o anfitrião começar…";
+  $("invite").innerHTML = m.addresses.length ? `Outros aparelhos na mesma rede abrem: ${m.addresses.map(a => `<b>${a}</b>`).join(" ou ")}` : "Abra este mesmo endereço nos outros aparelhos da rede.";
+
+  $("lobby").classList.toggle("hidden", phase !== "lobby");
+  $("over").classList.toggle("hidden", phase !== "over");
+  if (phase === "over" && m.results) {
+    const champ = m.results[0];
+    $("overTitle").textContent = `${champ.name} venceu!`; $("overTitle").style.color = LOOKS[champ.color].shirt;
+    $("overBoard").innerHTML = `<tr><td style="color:var(--muted)">Lutador</td><td></td><td style="color:var(--muted)">Vitórias</td><td style="color:var(--muted)">Abates</td></tr>` +
+      m.results.map(r => `<tr><td><span class="dot" style="background:${LOOKS[r.color].shirt}"></span>${esc(r.name)}</td><td style="color:var(--muted);font-size:.8rem">${r.bot ? "bot" : ""}</td><td>${r.w}</td><td>${r.k}</td></tr>`).join("");
+    $("overHost").classList.toggle("hidden", !me.host);
+    $("overWait").classList.toggle("hidden", me.host);
+  }
+}
+
+/* ═══════════════════ Visão da rede (interpolação) ═══════════════════ */
+let snaps = [], offset = null;
+const view = { demo: false, level: null, mapIdx: -1, round: -1, fighters: [], bullets: [], rockets: [], grenades: [], pickups: [],
+  feed: [], banner: null, scores: [], kills: [], cfg: { target: 3 }, suddenDeath: false, ending: null, slowmo: 0, me: null };
+
+function resetNet() {
+  snaps = []; offset = null;
+  Object.assign(view, { level: null, mapIdx: -1, round: -1, fighters: [], bullets: [], rockets: [], grenades: [], pickups: [], feed: [], banner: null, cfg: { target } });
+  V.particles = [];
+}
+
+function pushSnap(s) {
+  const sample = s.tm - performance.now();
+  offset = offset === null || sample > offset ? sample : offset + (sample - offset) * 0.02;
+  snaps.push(s);
+  // aba em segundo plano: descarta o excesso (sem tocar os sons atrasados)
+  while (snaps.length > 80) { const old = snaps.shift(); if (!old.applied) applyDiscrete(old, false); }
+}
+
+function applyDiscrete(s, withEvents = true) {
+  s.applied = true;
+  if (s.rd !== view.round || s.mp !== view.mapIdx) {
+    view.level = buildLevel(MAPS[s.mp]); view.mapIdx = s.mp; view.round = s.rd; V.particles = [];
+  }
+  s.o.forEach((v, i) => { const o = view.level.objs[i]; if (!o) return; o.alive = v !== 0; o.hp = Math.abs(v); o.hurtT = v < 0 ? 0.05 : 0; });
+  view.scores = s.sc; view.kills = s.k;
+  view.suddenDeath = !!(s.x & 1); view.ending = s.x & 2 ? {} : null; view.slowmo = s.x & 4 ? 1 : 0;
+  if (s.bn !== undefined) view.banner = s.bn ? { text: s.bn[0], sub: s.bn[1], color: s.bn[2] || null, dur: s.bn[3], t: s.bn[4] } : null;
+  if (s.fd) view.feed = s.fd.map(([text, t]) => ({ text, t }));
+  if (withEvents) for (const ev of s.ev) fx(...ev);
+}
+
+function lerpList(la, lb, a, make) {
+  const mb = new Map(lb.map(e => [e[0], e]));
+  return la.map(ea => make(ea, mb.get(ea[0]) || ea, a));
+}
+const lp = (p, q, a) => p + (q - p) * a;
+
+function buildView(real) {
+  if (!snaps.length) return false;
+  const rt = performance.now() + offset - DELAY;
+  for (const s of snaps) if (!s.applied && s.tm <= rt) applyDiscrete(s);
+  let ai = -1;
+  for (let i = snaps.length - 1; i >= 0; i--) if (snaps[i].tm <= rt) { ai = i; break; }
+  if (ai < 0) { if (!snaps[0].applied) applyDiscrete(snaps[0]); ai = 0; }
+  const A = snaps[ai], B0 = snaps[ai + 1] || A, B = B0.rd === A.rd ? B0 : A;
+  const al = B === A ? 0 : clamp((rt - A.tm) / (B.tm - A.tm), 0, 1);
+  // descarta fotos velhas já aplicadas
+  if (ai > 2) snaps = snaps.slice(ai - 2);
+
+  view.cfg.target = target;
+  view.fighters = roster.map((r, i) => {
+    const fa = A.f[i], fb0 = B.f[i] || fa;
+    const fb = (fa[5] & 1) !== (fb0[5] & 1) ? fa : fb0;
+    const f = view.fighters[i] || { id: i, w: 20 };
+    f.x = lp(fa[0], fb[0], al); f.y = lp(fa[1], fb[1], al); f.h = fa[2]; f.vx = fa[3]; f.dir = fa[4];
+    f.alive = !!(fa[5] & 1); f.crouch = !!(fa[5] & 2); f.onGround = !!(fa[5] & 4); f.melee = fa[5] & 8 ? "facao" : null;
+    f.hp = fa[6]; f.gun = GUN_IDX[fa[7]] ?? null; f.ammo = fa[8]; f.grenades = fa[9];
+    f.meleeAnim = lp(fa[10], fb[10], al); f.deadT = lp(fa[11], fb[11], al); f.anim = lp(fa[12], fb[12], al);
+    f.hurtT = fa[13]; f.flash = fa[14]; f.aim = fa[15] ?? null;
+    f.name = r.name; f.look = LOOKS[r.color]; f.isBot = r.bot;
+    return f;
+  });
+  view.bullets = lerpList(A.b, B.b, al, (a, b, t) => ({ x: lp(a[1], b[1], t), y: lp(a[2], b[2], t), vx: a[3], vy: a[4], sx: a[5], sy: a[6], tracer: !!a[7] }));
+  view.rockets = lerpList(A.r, B.r, al, (a, b, t) => ({ x: lp(a[1], b[1], t), y: lp(a[2], b[2], t), vx: a[3], vy: a[4] || 0 }));
+  view.grenades = lerpList(A.g, B.g, al, (a, b, t) => ({ x: lp(a[1], b[1], t), y: lp(a[2], b[2], t), w: 8, h: 8, fuse: a[3], spin: lp(a[4], b[4], t) }));
+  view.pickups = lerpList(A.p, B.p, al, (a, b, t) => ({ type: ITEM_IDX[a[1]], x: lp(a[2], b[2], t), y: lp(a[3], b[3], t), w: 22, h: 14, chute: !!a[4], life: a[5] }));
+  if (view.banner) view.banner.t += real;
+  for (const e of view.feed) e.t += real;
+  const mine = roster.findIndex(r => !r.bot && r.seat === me.seat && me.seat >= 0);
+  view.me = mine >= 0 ? mine : null;
+  return true;
+}
+
+/* ═══════════════════ Entrada ═══════════════════ */
+const KEYMAP = {
+  left: ["KeyA", "ArrowLeft"], right: ["KeyD", "ArrowRight"], up: ["KeyW", "ArrowUp", "Space"], down: ["KeyS", "ArrowDown"],
+  shoot: ["KeyF", "KeyK", "KeyJ", "Numpad1"], melee: ["KeyG", "KeyL", "Numpad2"], grenade: ["KeyH", "Semicolon", "Numpad3"],
+};
+const GAME_KEYS = new Set(Object.values(KEYMAP).flat());
+const keys = new Set(), touch = {};
+const typing = () => document.activeElement && ["INPUT", "SELECT"].includes(document.activeElement.tagName);
+addEventListener("keydown", e => {
+  audioInit();
+  if (typing()) return;
+  if (e.code === "KeyM" && !e.repeat) { Snd.muted = !Snd.muted; toast(Snd.muted ? "Som desligado" : "Som ligado"); }
+  if (phase === "play" && GAME_KEYS.has(e.code)) e.preventDefault();
+  keys.add(e.code); sendInput();
+});
+addEventListener("keyup", e => { keys.delete(e.code); sendInput(); });
+addEventListener("blur", () => { keys.clear(); sendInput(); });
+addEventListener("pointerdown", audioInit);
+
+/* Mouse: mira com o cursor (clique esq. atira, dir. soco/pegar, meio granada) */
+const mouse = { x: W / 2, y: H / 2, active: false, l: false, r: false, m: false };
+function toWorld(e) {
+  const r = cv.getBoundingClientRect();
+  mouse.x = (e.clientX - r.left) * W / r.width;
+  mouse.y = (e.clientY - r.top) * H / r.height;
+}
+addEventListener("pointermove", e => { if (e.pointerType !== "mouse") return; toWorld(e); if (phase === "play") { mouse.active = true; sendInput(); } });
+cv.addEventListener("mousedown", e => {
+  e.preventDefault(); audioInit(); toWorld(e);
+  if (phase !== "play") return;
+  mouse.active = true;
+  if (e.button === 0) mouse.l = true; else if (e.button === 2) mouse.r = true; else if (e.button === 1) mouse.m = true;
+  sendInput();
+});
+addEventListener("mouseup", e => { if (e.button === 0) mouse.l = false; else if (e.button === 2) mouse.r = false; else if (e.button === 1) mouse.m = false; sendInput(); });
+cv.addEventListener("contextmenu", e => e.preventDefault());
+
+function readInput() {
+  const s = { aim: null };
+  for (const k of KEYS) s[k] = KEYMAP[k].some(c => keys.has(c)) || !!touch[k];
+  const myF = view.me != null ? view.fighters[view.me] : null;
+  if (mouse.active && myF) {
+    s.shoot ||= mouse.l; s.melee ||= mouse.r; s.grenade ||= mouse.m;
+    s.aim = Math.atan2(mouse.y - (myF.y + (myF.crouch ? 9 : 11)), mouse.x - (myF.x + myF.w / 2));
+  }
+  const gps = navigator.getGamepads ? [...navigator.getGamepads()].filter(g => g && g.connected) : [];
+  for (const gp of gps) {
+    const b = i => !!(gp.buttons[i] && (gp.buttons[i].pressed || gp.buttons[i].value > 0.5));
+    const ax = gp.axes[0] || 0, ay = gp.axes[1] || 0;
+    s.left ||= ax < -0.35 || b(14); s.right ||= ax > 0.35 || b(15);
+    s.up ||= b(0) || b(12); s.down ||= ay > 0.6 || b(13);
+    s.shoot ||= b(2) || b(7) || b(5); s.melee ||= b(1); s.grenade ||= b(3) || b(4) || b(6);
+    const rx = gp.axes[2] || 0, ry = gp.axes[3] || 0;
+    if (Math.hypot(rx, ry) > 0.5) s.aim = Math.atan2(ry, rx);
+  }
+  return s;
+}
+let prevIn = {}, lastBits = -1, lastSend = 0, lastAim = null;
+const counters = [0, 0, 0, 0];
+function sendInput() {
+  if (phase !== "play") return;
+  const s = readInput();
+  let bits = 0, pressed = false;
+  KEYS.forEach((k, i) => { if (s[k]) bits |= 1 << i; });
+  PRESS_KEYS.forEach((k, i) => { if (s[k] && !prevIn[k]) { counters[i]++; pressed = true; } });
+  prevIn = s;
+  const now = performance.now();
+  const aim = s.aim == null ? null : Math.round(s.aim * 100) / 100;
+  const aimChanged = (aim === null) !== (lastAim === null) || (aim !== null && Math.abs(aim - lastAim) > 0.015 && now - lastSend > 25);
+  if (bits !== lastBits || pressed || aimChanged || now - lastSend > 250) {
+    send({ t: "i", k: bits, c: counters, a: aim });
+    lastBits = bits; lastSend = now; lastAim = aim;
+  }
+}
+
+// botões de toque
+const touchEl = $("touch");
+if (matchMedia("(pointer: coarse)").matches) touchEl.dataset.enabled = "1";
+for (const btn of touchEl.querySelectorAll("button")) {
+  const k = btn.dataset.k;
+  const on = e => { e.preventDefault(); audioInit(); touch[k] = true; btn.classList.add("on"); try { btn.setPointerCapture(e.pointerId); } catch {} sendInput(); };
+  const off = e => { e.preventDefault(); touch[k] = false; btn.classList.remove("on"); sendInput(); };
+  btn.addEventListener("pointerdown", on);
+  btn.addEventListener("pointerup", off);
+  btn.addEventListener("pointercancel", off);
+  btn.addEventListener("lostpointercapture", off);
+  btn.addEventListener("contextmenu", e => e.preventDefault());
+}
+
+/* ═══════════════════ Demonstração atrás do lobby ═══════════════════ */
+function startDemo() {
+  const names = shuffle(BOT_NAMES.slice());
+  startMatch({ slots: [0, 1, 2, 3].map(i => ({ type: "bot-" + pick(["medio", "dificil"]), color: i, name: names[i] })), map: "rand", target: 99, drops: 1.4 }, true);
+}
+let demoAcc = 0;
+function demoFrame(real) {
+  const ts = game.slowmo > 0 ? 0.3 : 1;
+  game.slowmo -= real;
+  demoAcc += real * ts;
+  let n = 0;
+  while (demoAcc >= STEP && n < 12) { step(STEP); demoAcc -= STEP; n++; }
+  if (n >= 12) demoAcc = 0;
+  roundFlow(real);
+  visualUpdate(real * ts, game, real);
+  V.silent = true;
+  render(game);
+}
+
+/* ═══════════════════ Laço ═══════════════════ */
+let last = performance.now();
+function frame(t) {
+  const real = Math.min(0.05, (t - last) / 1000); last = t;
+  const net = phase !== "lobby" && roster.length;
+  if (net && buildView(real)) {
+    sendInput();
+    V.silent = false;
+    const myF = view.me != null ? view.fighters[view.me] : null;
+    view.crosshair = phase === "play" && mouse.active && myF && myF.alive ? { x: mouse.x, y: mouse.y, color: myF.look.shirt } : null;
+    cv.style.cursor = view.crosshair ? "none" : "";
+    visualUpdate(real * (view.slowmo ? 0.3 : 1), view, real);
+    render(view);
+    const watching = phase === "play" && view.me === null;
+    if (watching) {
+      ctx.setTransform(SCALE, 0, 0, SCALE, 0, 0);
+      ctx.font = "bold 13px system-ui, sans-serif"; ctx.textAlign = "center";
+      ctx.fillStyle = "rgba(8,10,14,.75)"; ctx.fillRect(W / 2 - 170, H - 34, 340, 24);
+      ctx.fillStyle = "#c9d1e0"; ctx.fillText("Assistindo — você entra na próxima partida", W / 2, H - 17);
+    }
+    touchEl.classList.toggle("hidden", !touchEl.dataset.enabled || phase !== "play" || watching);
+  } else {
+    touchEl.classList.add("hidden");
+    cv.style.cursor = "";
+    if (game.state !== "play" || !game.demo) startDemo();
+    demoFrame(real);
+  }
+  requestAnimationFrame(frame);
+}
+
+startDemo();
+connect();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
